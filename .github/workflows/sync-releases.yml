@@ -4,7 +4,7 @@ on:
   push:
   schedule:
     # 每半小时执行 错开整点高峰
-    - cron: '10,37 * * * *'
+    - cron: '07,37 * * * *'
   workflow_dispatch:
 
 permissions:
