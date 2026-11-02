@@ -35,28 +35,16 @@ QWish 是一款基于 XPosed 的 QQ 增强模块，提供聊天功能扩展、�
 
 业务邮箱:aaasmclk@gmail.com 花清雨 72小时内回复
 
-## 自动发布 Release
+## 自动发布 Release 原理
 
-在运行工作流的仓库进入 **Settings → Environments**，创建名为 `release` 的环境，并配置：
+- 工作流 Action 和脚本需放在运行仓库的默认分支，发布目标可以是其他仓库。
 
-| 类型 | 名称 | 值 |
-| --- | --- | --- |
-| Environment variable | `RELEASE_REPOSITORY_URL` | 目标仓库 HTTPS URL，例如 `https://github.com/Xposed-Modules-Repo/top.qwish.xposed`（也支持 `.git` 后缀） |
-| Environment secret | `RELEASE_TOKEN` | 有目标仓库写入权限的 Personal access token (classic) |
+- 例如 Xposed-Modules-Repo 并不允许使用 Action发布，但你可以配置有`public_repo` 权限的 `Personal access tokens (classic)`
 
-经典 PAT 发布到公开仓库时需勾选 `public_repo`，私有仓库需勾选 `repo`；Token 所属账号也必须具备目标仓库写权限。如果目标组织启用了 SAML SSO，还需为 Token 授权。参见 [GitHub Token 权限说明](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps#available-scopes) 和 [SSO 授权说明](https://docs.github.com/en/enterprise-cloud@latest/authentication/authenticating-with-single-sign-on/authorizing-a-personal-access-token-for-use-with-single-sign-on)。
+1. GitHub Actions 在每次 push、手动运行或每 30 分钟检查后端接口，
+2. 检查后端接口和Release版本差异，如果有新版本则补发到Release
 
-工作流使用内置 `GITHUB_TOKEN` 读取当前仓库源码，使用上述经典 PAT 读取目标仓库的 Release 并上传、发布 APK。目标仓库与运行工作流的仓库可以不同；新建标签使用**目标仓库默认分支**，已有标签不变。缺少 URL 或 Token 时直接报错，请勿将 Token 写入 URL 或提交到仓库。
+3. 在运行工作流的仓库 **Settings → Secrets and variables → Actions** 中配置：
 
-- 每次 push、手动运行，以及每小时第 7、37 分钟检查 `https://service.qwish.top`；所有触发均读取运行仓库默认分支的同步脚本。
-- 以目标仓库已发布 Release 的最大 `versionCode` 为基准，只补发更高版本，按 `versionCode` 升序逐个发布；没有符合格式的已发布 Release 时只发布远程最新版。
-- 标签为 `{versionCode}-{versionName}`，标题为 `v{versionName}`，正文为 `updateLog`，附件名为 `fileName`，APK 按精确版本号下载。
-- 先下载 APK，再创建草稿、上传附件，成功后公开；失败即停止，后续运行复用同标签草稿继续。
-
-将工作流与脚本合入默认分支后启用。GitHub 的定时任务可能排队延迟；公开仓库连续 60 天没有活动时会自动停用定时任务，详见 [定时触发文档](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)。如果为 `release` 环境配置了审批或分支限制，运行也需满足这些规则。
-
-本地运行测试（Node.js 24 或更高版本）：
-
-```sh
-node --test .github/scripts/sync-releases.test.cjs
-```
+- **Variables**：`RELEASE_REPOSITORY_URL`，目标仓库 URL，例如 `https://github.com/Xposed-Modules-Repo/top.qwish.xposed`。
+- **Secrets**：`RELEASE_TOKEN`，有目标仓库写权限的经典 PAT；公开仓库需 `public_repo` 权限，私有仓库需 `repo` 权限。

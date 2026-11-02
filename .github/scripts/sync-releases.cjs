@@ -1,7 +1,7 @@
 'use strict';
 
 function parseRepositoryUrl(value) {
-    const error = () => new Error('Set RELEASE_REPOSITORY_URL to https://github.com/OWNER/REPO in the release environment variables');
+    const error = () => new Error('Set RELEASE_REPOSITORY_URL to https://github.com/OWNER/REPO in the repository Actions variables');
     let url;
     try {
         url = new URL(typeof value === 'string' ? value.trim() : '');
