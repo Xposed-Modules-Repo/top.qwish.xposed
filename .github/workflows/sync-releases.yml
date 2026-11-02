@@ -1,0 +1,39 @@
+name: Sync remote releases
+
+on:
+  push:
+  schedule:
+    # 每半小时执行 错开整点高峰
+    - cron: '10,37 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-remote-releases
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out the default branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Check and publish missing versions
+        uses: actions/github-script@v9
+        env:
+          UPDATE_API_BASE_URL: https://service.qwish.top
+        with:
+          retries: 0
+          script: |
+            const syncReleases = require('./.github/scripts/sync-releases.cjs');
+            await syncReleases({
+              github, context, core,
+              baseUrl: process.env.UPDATE_API_BASE_URL,
+            });

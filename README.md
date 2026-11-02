@@ -6,7 +6,6 @@ QWish 是一款基于 XPosed 的 QQ 增强模块，提供聊天功能扩展、�
 
 [在线下载](https://service.qwish.top)
 
-
 ## 功能简介
 
 - **聊天增强**：消息防撤回、消息时间显示、消息复读
@@ -18,7 +17,7 @@ QWish 是一款基于 XPosed 的 QQ 增强模块，提供聊天功能扩展、�
 
 - Android 8.1 及以上
 - LSPosed 或兼容的 免Root 框架
-- 支持 `arm64-v8a` 的设备(通常设备都支持)
+- 支持 `arm64-v8a` 的设备 (通常设备都支持)
 - 目标应用：QQ（`com.tencent.mobileqq`）
 
 ## 安装说明
