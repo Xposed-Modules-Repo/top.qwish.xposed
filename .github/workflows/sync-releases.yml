@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: sync-remote-releases
@@ -18,6 +18,7 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    environment: release
     steps:
       - name: Check out the default branch
         uses: actions/checkout@v7
@@ -25,15 +26,31 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
+      - name: Validate release configuration
+        env:
+          RELEASE_REPOSITORY_URL: ${{ vars.RELEASE_REPOSITORY_URL }}
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          node <<'NODE'
+          const { parseRepositoryUrl } = require('./.github/scripts/sync-releases.cjs');
+          parseRepositoryUrl(process.env.RELEASE_REPOSITORY_URL);
+          if (!process.env.RELEASE_TOKEN?.trim()) {
+            throw new Error('Set RELEASE_TOKEN in the release environment secrets');
+          }
+          NODE
+
       - name: Check and publish missing versions
         uses: actions/github-script@v9
         env:
+          RELEASE_REPOSITORY_URL: ${{ vars.RELEASE_REPOSITORY_URL }}
           UPDATE_API_BASE_URL: https://service.qwish.top
         with:
+          github-token: ${{ secrets.RELEASE_TOKEN }}
           retries: 0
           script: |
             const syncReleases = require('./.github/scripts/sync-releases.cjs');
             await syncReleases({
-              github, context, core,
+              github, core,
+              repositoryUrl: process.env.RELEASE_REPOSITORY_URL,
               baseUrl: process.env.UPDATE_API_BASE_URL,
             });

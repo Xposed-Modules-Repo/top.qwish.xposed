@@ -1,5 +1,23 @@
 'use strict';
 
+function parseRepositoryUrl(value) {
+    const error = () => new Error('Set RELEASE_REPOSITORY_URL to https://github.com/OWNER/REPO in the release environment variables');
+    let url;
+    try {
+        url = new URL(typeof value === 'string' ? value.trim() : '');
+    } catch {
+        throw error();
+    }
+    const match = /^\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/?$/.exec(url.pathname);
+    if (url.protocol !== 'https:' || url.hostname !== 'github.com' || url.port ||
+        url.username || url.password || url.search || url.hash || !match) {
+        throw error();
+    }
+    const repo = match[2].replace(/\.git$/, '');
+    if (!repo || repo === '.' || repo === '..') throw error();
+    return {owner: match[1], repo};
+}
+
 function versionCode(value, label) {
     if (!Number.isSafeInteger(value) || value < 0) {
         throw new Error(`${label} must be a non-negative safe integer`);
@@ -9,12 +27,15 @@ function versionCode(value, label) {
 
 module.exports = async function syncReleases({
                                                  github,
-                                                 context,
                                                  core,
+                                                 repositoryUrl,
                                                  baseUrl = 'https://service.qwish.top',
                                                  fetchImpl = fetch,
                                              }) {
-    const repo = context.repo;
+    const repo = parseRepositoryUrl(repositoryUrl);
+    const {data: targetRepository} = await github.rest.repos.get(repo);
+    if (!targetRepository.default_branch) throw new Error('Target repository has no default branch');
+    core.info(`Target repository: ${repo.owner}/${repo.repo}; default branch: ${targetRepository.default_branch}`);
     const releases = await github.paginate(github.rest.repos.listReleases, {
         ...repo,
         per_page: 100,
@@ -102,7 +123,7 @@ module.exports = async function syncReleases({
             ({data: draft} = await github.rest.repos.createRelease({
                 ...repo,
                 tag_name: tag,
-                target_commitish: context.payload.repository.default_branch,
+                target_commitish: targetRepository.default_branch,
                 name: `v${update.versionName}`,
                 body: update.updateLog,
                 draft: true,
@@ -146,3 +167,5 @@ module.exports = async function syncReleases({
         core.info(`Published ${tag}`);
     }
 };
+
+module.exports.parseRepositoryUrl = parseRepositoryUrl;

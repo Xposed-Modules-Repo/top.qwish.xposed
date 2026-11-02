@@ -9,6 +9,8 @@ const context = {
     repo: {owner: 'test', repo: 'qwish'},
     payload: {repository: {default_branch: 'main'}},
 };
+const repositoryUrl = 'https://github.com/release-org/qwish-mirror.git';
+const targetRepo = {owner: 'release-org', repo: 'qwish-mirror'};
 const update = code => ({
     versionCode: code,
     versionName: `3.0.${code - 300}`,
@@ -37,21 +39,31 @@ function fixture({releases = [], records = [update(303)], latest = 303} = {}) {
         }),
     };
     const repos = {
+        async get(args) {
+            assert.deepEqual(args, targetRepo);
+            return {data: {default_branch: 'trunk'}};
+        },
         listReleases() {
         },
         listReleaseAssets() {
         },
         async createRelease(args) {
+            assert.equal(args.owner, targetRepo.owner);
+            assert.equal(args.repo, targetRepo.repo);
             state.calls.push(['create', args]);
             const draft = {...args, id: state.releases.length + 1000};
             state.releases.push(draft);
             return {data: draft};
         },
         async deleteReleaseAsset(args) {
+            assert.equal(args.owner, targetRepo.owner);
+            assert.equal(args.repo, targetRepo.repo);
             state.calls.push(['delete', args]);
             state.assets = state.assets.filter(item => item.id !== args.asset_id);
         },
         async uploadReleaseAsset(args) {
+            assert.equal(args.owner, targetRepo.owner);
+            assert.equal(args.repo, targetRepo.repo);
             state.calls.push(['upload', args]);
             const asset = {
                 id: state.calls.length,
@@ -67,6 +79,8 @@ function fixture({releases = [], records = [update(303)], latest = 303} = {}) {
             return {data: asset};
         },
         async updateRelease(args) {
+            assert.equal(args.owner, targetRepo.owner);
+            assert.equal(args.repo, targetRepo.repo);
             state.calls.push(['publish', args]);
             if (state.failPublish) throw new Error('Publish failed');
             const draft = state.releases.find(item => item.id === args.release_id);
@@ -79,8 +93,8 @@ function fixture({releases = [], records = [update(303)], latest = 303} = {}) {
         rest: {repos},
         async paginate(method, args) {
             assert.equal(args.per_page, 100);
-            assert.equal(args.owner, context.repo.owner);
-            assert.equal(args.repo, context.repo.repo);
+            assert.equal(args.owner, targetRepo.owner);
+            assert.equal(args.repo, targetRepo.repo);
             if (method === repos.listReleases) return state.releases;
             assert.equal(method, repos.listReleaseAssets);
             return state.assets.filter(item => item.release_id === args.release_id);
@@ -89,6 +103,7 @@ function fixture({releases = [], records = [update(303)], latest = 303} = {}) {
     const run = () => syncReleases({
         github,
         context,
+        repositoryUrl,
         core: {
             info() {
             }, warning(message) {
@@ -129,7 +144,7 @@ test('uses maximum published versionCode and publishes all newer versions in ord
     assert.equal(draft.draft, true);
     assert.equal(draft.name, 'v3.0.3');
     assert.equal(draft.body, update(303).updateLog);
-    assert.equal(draft.target_commitish, 'main');
+    assert.equal(draft.target_commitish, 'trunk');
     const upload = state.calls[1][1];
     assert.equal(upload.name, update(303).fileName);
     assert.deepEqual(upload.data, apk);
@@ -248,12 +263,16 @@ test('business errors, HTTP errors and malformed JSON fail instead of looking up
             github: {
                 rest: {
                     repos: {
+                        async get() {
+                            return {data: {default_branch: 'trunk'}};
+                        },
                         listReleases() {
                         }
                     }
                 }, paginate: async () => []
             },
             context,
+            repositoryUrl,
             core: {
                 info() {
                 }
@@ -271,4 +290,35 @@ test('unrecognized release tags are warned about; matching published prereleases
     assert.equal(state.warnings.length, 1);
     assert.equal(state.requests[0][1], 302);
     assert.deepEqual(state.published, ['303-3.0.3']);
+});
+
+test('repository URL accepts HTTPS GitHub repository URLs with optional .git and trailing slash', () => {
+    for (const value of [
+        'https://github.com/release-org/qwish-mirror',
+        repositoryUrl,
+        `${repositoryUrl}/`,
+        '  https://github.com/release-org/qwish-mirror/  ',
+    ]) {
+        assert.deepEqual(syncReleases.parseRepositoryUrl(value), targetRepo);
+    }
+});
+
+test('invalid or missing target URL fails before any GitHub API request', async () => {
+    for (const value of [
+        undefined, '', 'release-org/qwish-mirror', 'https://example.com/owner/repo',
+        'http://github.com/owner/repo', 'https://github.com/owner/repo/issues',
+        'https://token@github.com/owner/repo', 'https://github.com/owner/repo?token=value',
+        'https://github.com/owner/repo#branch', 'https://github.com/owner/.git',
+        'https://github.com:8443/owner/repo',
+    ]) {
+        await assert.rejects(() => syncReleases({repositoryUrl: value}), /RELEASE_REPOSITORY_URL/);
+    }
+});
+
+test('target repository lookup errors stop the run before reading the remote API', async () => {
+    await assert.rejects(() => syncReleases({
+        repositoryUrl,
+        github: {rest: {repos: {get: async () => {throw new Error('403 forbidden');}}}},
+        fetchImpl: () => assert.fail('Must not query updates after a target repository access error'),
+    }), /403 forbidden/);
 });
