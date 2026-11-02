@@ -37,14 +37,14 @@ QWish 是一款基于 XPosed 的 QQ 增强模块，提供聊天功能扩展、�
 
 ## 自动发布 Release 原理
 
-- 工作流 Action 和脚本需放在运行仓库的默认分支，发布目标可以是其他仓库。
-
+- 工作流 Action 和脚本需放在运行仓库的默认分支，发布目标可以是其他仓库
 - 例如 Xposed-Modules-Repo 并不允许使用 Action发布，但你可以配置有`public_repo` 权限的 `Personal access tokens (classic)`
+- 我的做法是放到Fork [repo](https://github.com/suzhelan/top.qwish.xposed/blob/main/.github/workflows/sync-releases.yml)仓库中运行Actions，然后发布到Xposed-Modules-Repo
+
+0. 在运行工作流的仓库 **Settings → Secrets and variables → Actions** 中配置：
+- **Variables**：`RELEASE_REPOSITORY_URL`，目标仓库 URL，例如 `https://github.com/Xposed-Modules-Repo/top.qwish.xposed`。
+- **Secrets**：`RELEASE_TOKEN`，有目标仓库写权限的经典 PAT；公开仓库需 `public_repo` 权限，私有仓库需 `repo` 权限。
 
 1. GitHub Actions 在每次 push、手动运行或每 30 分钟检查后端接口，
 2. 检查后端接口和Release版本差异，如果有新版本则补发到Release
 
-3. 在运行工作流的仓库 **Settings → Secrets and variables → Actions** 中配置：
-
-- **Variables**：`RELEASE_REPOSITORY_URL`，目标仓库 URL，例如 `https://github.com/Xposed-Modules-Repo/top.qwish.xposed`。
-- **Secrets**：`RELEASE_TOKEN`，有目标仓库写权限的经典 PAT；公开仓库需 `public_repo` 权限，私有仓库需 `repo` 权限。
